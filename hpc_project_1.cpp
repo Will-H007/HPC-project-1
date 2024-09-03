@@ -1,14 +1,14 @@
 #include <iostream>
 #include <vector>
 #include <fstream>
-#include <iomanip> // for std::setprecision
-#include <cstdlib> // for rand() and srand()
-#include <ctime>   // for time()
+#include <iomanip> 
+#include <cstdlib> 
+#include <ctime>   
 #include <omp.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <chrono> // Required for timing with chrono
-#include <algorithm> // Required for std::find
+#include <chrono> 
+#include <algorithm> 
 
 using namespace std;
 

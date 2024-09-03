@@ -1,124 +1,168 @@
 #include <iostream>
 #include <vector>
-#include <omp.h>
+#include <fstream>
 #include <cstdlib>
 #include <ctime>
 
-#define SIZE 100  // Matrix size
+#define SIZE 100 // Define the matrix size
 
 using namespace std;
 
-// Ordinary matrix multiplication
-void matrixMultiplication(const vector<vector<int>>& X, const vector<vector<int>>& Y, vector<vector<int>>& Z) {
-    for (int i = 0; i < SIZE; i++) {
-        for (int j = 0; j < SIZE; j++) {
-            Z[i][j] = 0;
-            for (int k = 0; k < SIZE; k++) {
-                Z[i][j] += X[i][k] * Y[k][j];
-            }
-        }
+struct CRSMatrix {
+    vector<int> values;
+    vector<int> columns;
+    vector<int> rowPointer;
+    int nonZeros;
+    CRSMatrix() : nonZeros(0) {
+        rowPointer.resize(SIZE + 1, 0);
     }
-}
+};
 
-// Matrix multiplication using OpenMP
-void matrixMultiplicationParallel(const vector<vector<int>>& X, const vector<vector<int>>& Y, vector<vector<int>>& Z, int num_threads) {
-    #pragma omp parallel for collapse(2) num_threads(num_threads)
-    for (int i = 0; i < SIZE; i++) {
-        for (int j = 0; j < SIZE; j++) {
-            Z[i][j] = 0;
-            for (int k = 0; k < SIZE; k++) {
-                Z[i][j] += X[i][k] * Y[k][j];
-            }
-        }
-    }
-}
+// Function to generate a sparse matrix in CRS format
+CRSMatrix generateSparseMatrixCRS(int size, double probability) {
+    CRSMatrix crsMatrix;
+    vector<int> valuesTemp, columnsTemp;
+    crsMatrix.rowPointer[0] = 0;
 
-// Generate a sparse matrix
-vector<vector<int>> generateSparseMatrix(double probability) {
-    vector<vector<int>> matrix(SIZE, vector<int>(SIZE, 0));
     srand(time(0));
-    
-    for (int i = 0; i < SIZE; i++) {
-        for (int j = 0; j < SIZE; j++) {
+    for (int i = 0; i < size; i++) {
+        for (int j = 0; j < size; j++) {
             if ((rand() % 100) < (probability * 100)) {
-                matrix[i][j] = rand() % 10 + 1;  // Random integer between 1 and 10
+                valuesTemp.push_back(rand() % 10 + 1);
+                columnsTemp.push_back(j);
             }
         }
+        crsMatrix.rowPointer[i + 1] = valuesTemp.size();
     }
-    return matrix;
+
+    crsMatrix.nonZeros = valuesTemp.size();
+    crsMatrix.values = valuesTemp;
+    crsMatrix.columns = columnsTemp;
+
+
+
+    return crsMatrix;
 }
 
-// Row compression for sparse matrices
-void rowCompression(const vector<vector<int>>& matrix, vector<vector<int>>& B, vector<vector<int>>& C) {
+void generateRowCompressedMatrices(const CRSMatrix& X, CRSMatrix& B, CRSMatrix& C) {
+    vector<int> valuesB, columnsB;
+    vector<int> valuesC, columnsC;
+
+    B.rowPointer.push_back(0);
+    C.rowPointer.push_back(0);
+
     for (int i = 0; i < SIZE; i++) {
-        vector<int> b_row;
-        vector<int> c_row;
-        
-        for (int j = 0; j < SIZE; j++) {
-            if (matrix[i][j] != 0) {
-                b_row.push_back(matrix[i][j]);
-                c_row.push_back(j);
+        int rowStart = X.rowPointer[i];
+        int rowEnd = X.rowPointer[i + 1];
+        int numNonZeros = rowEnd - rowStart;
+
+        if (numNonZeros > 0) {
+            for (int j = rowStart; j < rowEnd; j++) {
+                valuesB.push_back(X.values[j]);
+                columnsB.push_back(X.columns[j]);
+                valuesC.push_back(X.values[j]); // Copy values for C as well
+                columnsC.push_back(X.columns[j]); // Copy columns for C
             }
+        } else {
+            // Handle rows with no non-zero values if necessary
+            // Here you should add your logic if needed
         }
-        
-        if (b_row.empty()) {  // Handle empty row
-            b_row.push_back(0);
-            c_row.push_back(-1);  // -1 to indicate an empty row
-        }
-        
-        B.push_back(b_row);
-        C.push_back(c_row);
+
+        B.rowPointer.push_back(valuesB.size());
+        C.rowPointer.push_back(valuesC.size());
     }
+
+    B.nonZeros = valuesB.size();
+    C.nonZeros = valuesC.size();
+    B.values = valuesB;
+    B.columns = columnsB; // Ensure B.columns is correctly populated
+    C.values = valuesC;
+    C.columns = columnsC;
 }
 
-// Evaluate performance of parallel matrix multiplication
-void evaluatePerformance(const vector<vector<int>>& X, const vector<vector<int>>& Y, vector<vector<int>>& Z) {
-    double best_time = 1e9;
-    int best_threads = 1;
 
-    for (int threads = 1; threads <= 64; threads++) {
-        double start_time = omp_get_wtime();
 
-        matrixMultiplicationParallel(X, Y, Z, threads);
+void saveCRSToFile(const CRSMatrix& matrix, const std::string& filename) {
+    std::ofstream file(filename);
 
-        double end_time = omp_get_wtime();
-        double elapsed_time = end_time - start_time;
-
-        cout << "Threads: " << threads << ", Time: " << elapsed_time << " seconds" << endl;
-
-        if (elapsed_time < best_time) {
-            best_time = elapsed_time;
-            best_threads = threads;
-        }
+    if (!file.is_open()) {
+        std::cerr << "Failed to open file: " << filename << std::endl;
+        return;
     }
 
-    cout << "Best performance with " << best_threads << " threads: " << best_time << " seconds" << endl;
+    file << "RowPointers: ";
+    for (size_t i = 0; i < matrix.rowPointer.size(); ++i) {
+        file << matrix.rowPointer[i] << " ";
+    }
+    file << std::endl;
+
+    file << "Values: ";
+    for (size_t i = 0; i < matrix.values.size(); ++i) {
+        file << matrix.values[i] << " ";
+    }
+    file << std::endl;
+
+    file << "Columns: ";
+    for (size_t i = 0; i < matrix.columns.size(); ++i) {
+        file << matrix.columns[i] << " ";
+    }
+    file << std::endl;
+
+    file.close();
+}
+
+
+void printMatrixInfo(const CRSMatrix& matrix, const string& name) {
+    cout << name << " nonZeros: " << matrix.nonZeros << endl;
+
+    cout << name << " RowPointers: ";
+    for (size_t i = 0; i < matrix.rowPointer.size(); ++i) {
+        cout << matrix.rowPointer[i] << " ";
+    }
+    cout << endl;
+
+    cout << name << " Values: ";
+    for (size_t i = 0; i < matrix.values.size(); ++i) {
+        cout << matrix.values[i] << " ";
+    }
+    cout << endl;
+
+    cout << name << " Columns: ";
+    for (size_t i = 0; i < matrix.columns.size(); ++i) {
+        cout << matrix.columns[i] << " ";
+    }
+    cout << endl;
+}
+
+// Function to evaluate performance and save results
+void evaluatePerformance(int size, const vector<double>& probabilities) {
+    for (size_t i = 0; i < probabilities.size(); ++i) {
+        double probability = probabilities[i];
+        cout << "Generating matrices for set " << (i + 1) << " with probability " << probability << endl;
+
+        CRSMatrix X = generateSparseMatrixCRS(size, probability);
+        CRSMatrix Y = generateSparseMatrixCRS(size, probability);
+
+        CRSMatrix XB, XC, YB, YC;
+        generateRowCompressedMatrices(X, XB, XC);
+        generateRowCompressedMatrices(Y, YB, YC);
+
+        // printMatrixInfo(XB, "MatrixX_B");
+        // printMatrixInfo(XC, "MatrixX_C");
+        // printMatrixInfo(YB, "MatrixY_B");
+        // printMatrixInfo(YC, "MatrixY_C");
+
+        // Save matrices to files
+        saveCRSToFile(XB, "MatrixX_B_" + to_string(i + 1) + ".txt");
+        saveCRSToFile(XC, "MatrixX_C_" + to_string(i + 1) + ".txt");
+        saveCRSToFile(YB, "MatrixY_B_" + to_string(i + 1) + ".txt");
+        saveCRSToFile(YC, "MatrixY_C_" + to_string(i + 1) + ".txt");
+    }
 }
 
 int main() {
-    srand(time(0));
-
-    // Task 1: Ordinary Matrix Multiplication
-    vector<vector<int>> X(SIZE, vector<int>(SIZE, rand() % 10 + 1));  // Example matrix X
-    vector<vector<int>> Y(SIZE, vector<int>(SIZE, rand() % 10 + 1));  // Example matrix Y
-    vector<vector<int>> Z(SIZE, vector<int>(SIZE, 0));  // Result matrix
-
-    cout << "Ordinary Matrix Multiplication:" << endl;
-    matrixMultiplication(X, Y, Z);
-    
-    // Task 2: Generate B and C matrices
-    double probability = 0.05;  // Example sparsity probability
-    vector<vector<int>> sparseX = generateSparseMatrix(probability);
-    vector<vector<int>> XB, XC, YB, YC;
-    
-    rowCompression(sparseX, XB, XC);
-    rowCompression(sparseX, YB, YC);  // Just an example, could use different matrices
-
-    cout << "Generated B and C matrices for sparse matrix X." << endl;
-
-    // Task 3: Evaluate performance with OpenMP
-    cout << "Evaluating performance with varying threads:" << endl;
-    evaluatePerformance(X, Y, Z);
+    vector<double> probabilities = {0.01, 0.02, 0.05};
+    evaluatePerformance(SIZE, probabilities);
 
     return 0;
 }

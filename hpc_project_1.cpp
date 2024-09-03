@@ -5,6 +5,10 @@
 #include <cstdlib> // for rand() and srand()
 #include <ctime>   // for time()
 #include <omp.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <chrono> // Required for timing with chrono
+#include <algorithm> // Required for std::find
 
 using namespace std;
 
@@ -70,40 +74,39 @@ void writeMatrixToFile(const vector<vector<int>>& matrix, const string& filename
 
     file.close();
 }
- 
 
+// Function to multiply sparse matrices
 vector<vector<int>> multiplySparseMatrices(
     const vector<vector<int>>& B1, const vector<vector<int>>& C1,
     const vector<vector<int>>& B2, const vector<vector<int>>& C2, int size) {
 
     vector<vector<int>> result(size, vector<int>(size, 0));
 
-    #pragma omp parallel for
-    for (int i = 0; i < size; ++i) {
-        for (int j = 0; j < size; ++j) {
-            int sum = 0;
-            for (int k = 0; k < B1[i].size(); ++k) {
-                int value1 = B1[i][k];
-                int col1 = C1[i][k];
+    #pragma omp parallel
+    {
+        #pragma omp for
+        for (int i = 0; i < size; ++i) {
+            for (int j = 0; j < size; ++j) {
+                int sum = 0;
+                for (int k = 0; k < B1[i].size(); ++k) {
+                    int value1 = B1[i][k];
+                    int col1 = C1[i][k];
 
-                // Efficient lookup with std::find can be slow; consider using unordered_map for large matrices
-                auto it = find(C2[col1].begin(), C2[col1].end(), j);
-                if (it != C2[col1].end()) {
-                    int index2 = it - C2[col1].begin();
-                    int value2 = B2[col1][index2];
-                    sum += value1 * value2;
+                    // Efficient lookup with std::find can be slow; consider using unordered_map for large matrices
+                    auto it = find(C2[col1].begin(), C2[col1].end(), j);
+                    if (it != C2[col1].end()) {
+                        int index2 = it - C2[col1].begin();
+                        int value2 = B2[col1][index2];
+                        sum += value1 * value2;
+                    }
                 }
+                result[i][j] = sum;
             }
-            result[i][j] = sum;
         }
     }
 
     return result;
 }
-
-
-
-
 
 // Function to multiply two dense matrices
 vector<vector<int>> multiplyDenseMatrices(const vector<vector<int>>& A, const vector<vector<int>>& B) {
@@ -144,13 +147,50 @@ void checkResults(const vector<vector<int>>& sparseResult, const vector<vector<i
     }
 }
 
-int main() {
+int main(int argc, char* argv[]) {
     int size = 100; // Adjust size as needed
     double probabilities[] = {0.01, 0.02, 0.05}; // Probabilities to test
+
+    // Get the number of threads from environment variable or default to 1
+    int num_threads = (argc > 2) ? stoi(argv[2]) : (getenv("NUM_THREADS") ? stoi(getenv("NUM_THREADS")) : 1);
+    omp_set_num_threads(num_threads); // Set the number of OpenMP threads
+
+    string folder = (argc > 1) ? argv[1] : "SparseMatrixResults_" + to_string(num_threads);
+
+    // Create the folder if it doesn't exist
+    if (mkdir(folder.c_str(), 0777) && errno != EEXIST) {
+        cerr << "Error creating directory: " << folder << endl;
+        return 1;
+    }
+
+    // Print the number of threads being used
+    cout << "Number of threads used: " << num_threads << endl;
+
+    // Create the CSV file name including the number of threads
+    string csv_filename = "result.csv";
+
+    // Open the CSV file for writing
+    ofstream result_file(csv_filename, ios::app); // Open in append mode
+    if (!result_file.is_open()) {
+        cerr << "Error opening " << csv_filename << " for writing." << endl;
+        return 1;
+    }
+
+    // Write header to the CSV file if it is newly created
+    if (result_file.tellp() == 0) { // Check if the file is empty
+        result_file << "Probability,Threads,Time (seconds)\n";
+    }
 
     for (double probability : probabilities) {
         vector<vector<int>> X, Y;
         vector<vector<int>> XB, XC, YB, YC;
+
+        // Construct file names
+        string probStr = to_string(probability).substr(2); // Get string after "0."
+        string XB_file = folder + "/XB_" + probStr + ".txt";
+        string XC_file = folder + "/XC_" + probStr + ".txt";
+        string YB_file = folder + "/YB_" + probStr + ".txt";
+        string YC_file = folder + "/YC_" + probStr + ".txt";
 
         // Generate random sparse matrices X and Y
         generateSparseMatrix(size, probability, X);
@@ -161,11 +201,10 @@ int main() {
         breakdownMatrix(Y, YB, YC);
 
         // Write matrices XB, XC, YB, and YC to files
-        string probStr = to_string(probability).substr(2); // Get string after "0."
-        writeMatrixToFile(XB, "XB_" + probStr + ".txt");
-        writeMatrixToFile(XC, "XC_" + probStr + ".txt");
-        writeMatrixToFile(YB, "YB_" + probStr + ".txt");
-        writeMatrixToFile(YC, "YC_" + probStr + ".txt");
+        writeMatrixToFile(XB, XB_file);
+        writeMatrixToFile(XC, XC_file);
+        writeMatrixToFile(YB, YB_file);
+        writeMatrixToFile(YC, YC_file);
 
         cout << "Matrices for probability " << probability << " written to files." << endl;
 
@@ -178,14 +217,19 @@ int main() {
         chrono::duration<double> elapsed = end - start;
         cout << "Sparse matrix multiplication took " << fixed << setprecision(6) << elapsed.count() << " seconds." << endl;
 
+        // Write timing result to CSV file
+        result_file << fixed << setprecision(6) << probability << ","
+                    << num_threads << ","
+                    << elapsed.count() << "\n";
 
         // Perform dense matrix multiplications for comparison
         vector<vector<int>> dense_result = multiplyDenseMatrices(X, Y);
 
-
         // Check results
         checkResults(sparse_result, dense_result);
     }
+
+    result_file.close();
 
     return 0;
 }

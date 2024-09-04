@@ -1,0 +1,65 @@
+Running with 64 threads
+NUM_THREADS environment variable: 64
+Number of threads used: 64
+Number of threads used: 64
+Matrices for probability 0.01 written to files.
+Sparse matrix multiplication took 0.033886 seconds.
+Results match!
+Matrices for probability 0.020000 written to files.
+Sparse matrix multiplication took 0.080049 seconds.
+Results match!
+Matrices for probability 0.050000 written to files.
+Sparse matrix multiplication took 0.336319 seconds.
+Results match!
+Running with 32 threads
+NUM_THREADS environment variable: 32
+Number of threads used: 32
+Number of threads used: 32
+Matrices for probability 0.01 written to files.
+Sparse matrix multiplication took 0.054491 seconds.
+Results match!
+Matrices for probability 0.020000 written to files.
+Sparse matrix multiplication took 0.142999 seconds.
+Results match!
+Matrices for probability 0.050000 written to files.
+Sparse matrix multiplication took 0.592484 seconds.
+Results match!
+Running with 16 threads
+NUM_THREADS environment variable: 16
+Number of threads used: 16
+Number of threads used: 16
+Matrices for probability 0.01 written to files.
+Sparse matrix multiplication took 0.105305 seconds.
+Results match!
+Matrices for probability 0.020000 written to files.
+Sparse matrix multiplication took 0.268211 seconds.
+Results match!
+Matrices for probability 0.050000 written to files.
+Sparse matrix multiplication took 1.178385 seconds.
+Results match!
+Running with 8 threads
+NUM_THREADS environment variable: 8
+Number of threads used: 8
+Number of threads used: 8
+Matrices for probability 0.01 written to files.
+Sparse matrix multiplication took 0.180115 seconds.
+Results match!
+Matrices for probability 0.020000 written to files.
+Sparse matrix multiplication took 0.484316 seconds.
+Results match!
+Matrices for probability 0.050000 written to files.
+Sparse matrix multiplication took 2.056662 seconds.
+Results match!
+Running with 4 threads
+NUM_THREADS environment variable: 4
+Number of threads used: 4
+Number of threads used: 4
+Matrices for probability 0.01 written to files.
+Sparse matrix multiplication took 0.349004 seconds.
+Results match!
+Matrices for probability 0.020000 written to files.
+Sparse matrix multiplication took 0.926863 seconds.
+Results match!
+Matrices for probability 0.050000 written to files.
+Sparse matrix multiplication took 3.945045 seconds.
+Results match!

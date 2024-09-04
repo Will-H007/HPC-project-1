@@ -148,11 +148,15 @@ void checkResults(const vector<vector<int>>& sparseResult, const vector<vector<i
 }
 
 int main(int argc, char* argv[]) {
-    int size = 100000; // Adjust size as needed
+    int size = 1000; // Adjust size as needed
     double probabilities[] = {0.01, 0.02, 0.05}; // Probabilities to test
 
     // Get the number of threads from environment variable or default to 1
     int num_threads = (argc > 2) ? stoi(argv[2]) : (getenv("NUM_THREADS") ? stoi(getenv("NUM_THREADS")) : 1);
+
+    cout << "NUM_THREADS environment variable: " << getenv("NUM_THREADS") << endl;
+    cout << "Number of threads used: " << num_threads << endl;
+
     omp_set_num_threads(num_threads); // Set the number of OpenMP threads
 
     string folder = (argc > 1) ? argv[1] : "SparseMatrixResults_" + to_string(num_threads);

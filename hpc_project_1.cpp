@@ -92,7 +92,7 @@ vector<vector<int>> multiplySparseMatrices(
                     int value1 = B1[i][k];
                     int col1 = C1[i][k];
 
-                    // Efficient lookup with std::find can be slow; consider using unordered_map for large matrices
+                  
                     auto it = find(C2[col1].begin(), C2[col1].end(), j);
                     if (it != C2[col1].end()) {
                         int index2 = it - C2[col1].begin();
@@ -108,8 +108,8 @@ vector<vector<int>> multiplySparseMatrices(
     return result;
 }
 
-// Function to multiply two dense matrices
-vector<vector<int>> multiplyDenseMatrices(const vector<vector<int>>& A, const vector<vector<int>>& B) {
+// Function to multiply two matrices
+vector<vector<int>> multiplyMatrices(const vector<vector<int>>& A, const vector<vector<int>>& B) {
     int size = A.size();
     vector<vector<int>> result(size, vector<int>(size, 0));
 
@@ -148,7 +148,7 @@ void checkResults(const vector<vector<int>>& sparseResult, const vector<vector<i
 }
 
 int main(int argc, char* argv[]) {
-    int size = 100; // Adjust size as needed
+    int size = 100000; // Adjust size as needed
     double probabilities[] = {0.01, 0.02, 0.05}; // Probabilities to test
 
     // Get the number of threads from environment variable or default to 1
@@ -223,7 +223,7 @@ int main(int argc, char* argv[]) {
                     << elapsed.count() << "\n";
 
         // Perform dense matrix multiplications for comparison
-        vector<vector<int>> dense_result = multiplyDenseMatrices(X, Y);
+        vector<vector<int>> dense_result = multiplyMatrices(X, Y);
 
         // Check results
         checkResults(sparse_result, dense_result);

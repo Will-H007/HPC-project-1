@@ -75,12 +75,17 @@ void writeMatrixToFile(const vector<vector<int>>& matrix, const string& filename
     file.close();
 }
 
-// Function to multiply sparse matrices
+
+
 vector<vector<int>> multiplySparseMatrices(
     const vector<vector<int>>& B1, const vector<vector<int>>& C1,
-    const vector<vector<int>>& B2, const vector<vector<int>>& C2, int size) {
+    const vector<vector<int>>& B2, const vector<vector<int>>& C2, int size,
+    omp_sched_t schedule_type, int chunk_size) {
 
     vector<vector<int>> result(size, vector<int>(size, 0));
+
+    // Set OpenMP scheduling strategy
+    omp_set_schedule(schedule_type, chunk_size);
 
     #pragma omp parallel
     {
@@ -92,7 +97,11 @@ vector<vector<int>> multiplySparseMatrices(
                     int value1 = B1[i][k];
                     int col1 = C1[i][k];
 
-                  
+                    if (col1 >= C2.size() || j >= size) {
+                        cerr << "Index out of bounds: col1=" << col1 << ", j=" << j << endl;
+                        continue;
+                    }
+
                     auto it = find(C2[col1].begin(), C2[col1].end(), j);
                     if (it != C2[col1].end()) {
                         int index2 = it - C2[col1].begin();
@@ -107,6 +116,7 @@ vector<vector<int>> multiplySparseMatrices(
 
     return result;
 }
+
 
 // Function to multiply two matrices
 vector<vector<int>> multiplyMatrices(const vector<vector<int>>& A, const vector<vector<int>>& B) {
@@ -147,9 +157,18 @@ void checkResults(const vector<vector<int>>& sparseResult, const vector<vector<i
     }
 }
 
+
 int main(int argc, char* argv[]) {
     int size = 1000; // Adjust size as needed
     double probabilities[] = {0.01, 0.02, 0.05}; // Probabilities to test
+
+    // Define scheduling strategies and chunk sizes
+    vector<pair<omp_sched_t, int>> scheduling_strategies = {
+        {omp_sched_static, 10},
+        {omp_sched_dynamic, 10},
+        {omp_sched_guided, 10},
+        {omp_sched_auto, 10}
+    };
 
     // Get the number of threads from environment variable or default to 1
     int num_threads = (argc > 2) ? stoi(argv[2]) : (getenv("NUM_THREADS") ? stoi(getenv("NUM_THREADS")) : 1);
@@ -171,7 +190,7 @@ int main(int argc, char* argv[]) {
     cout << "Number of threads used: " << num_threads << endl;
 
     // Create the CSV file name including the number of threads
-    string csv_filename = "result.csv";
+    string csv_filename = folder + "/result.csv";
 
     // Open the CSV file for writing
     ofstream result_file(csv_filename, ios::app); // Open in append mode
@@ -182,7 +201,7 @@ int main(int argc, char* argv[]) {
 
     // Write header to the CSV file if it is newly created
     if (result_file.tellp() == 0) { // Check if the file is empty
-        result_file << "Probability,Threads,Time (seconds)\n";
+        result_file << "Probability,SchedulingStrategy,ChunkSize,Threads,Time (seconds)\n";
     }
 
     for (double probability : probabilities) {
@@ -212,25 +231,42 @@ int main(int argc, char* argv[]) {
 
         cout << "Matrices for probability " << probability << " written to files." << endl;
 
-        // Time the sparse matrix multiplication
-        auto start = chrono::high_resolution_clock::now();
+        for (const auto& strategy : scheduling_strategies) {
+            omp_sched_t sched_type = strategy.first;
+            int chunk_size = strategy.second;
 
-        vector<vector<int>> sparse_result = multiplySparseMatrices(XB, XC, YB, YC, size);
+            // Set the scheduling strategy for OpenMP
+            omp_set_schedule(sched_type, chunk_size); // Set scheduling strategy
 
-        auto end = chrono::high_resolution_clock::now();
-        chrono::duration<double> elapsed = end - start;
-        cout << "Sparse matrix multiplication took " << fixed << setprecision(6) << elapsed.count() << " seconds." << endl;
+            // Time the sparse matrix multiplication
+            auto start = chrono::high_resolution_clock::now();
 
-        // Write timing result to CSV file
-        result_file << fixed << setprecision(6) << probability << ","
-                    << num_threads << ","
-                    << elapsed.count() << "\n";
+            vector<vector<int>> sparse_result = multiplySparseMatrices(XB, XC, YB, YC, size, sched_type, chunk_size);
 
-        // Perform dense matrix multiplications for comparison
-        vector<vector<int>> dense_result = multiplyMatrices(X, Y);
+            auto end = chrono::high_resolution_clock::now();
+            chrono::duration<double> elapsed = end - start;
+            cout << "Sparse matrix multiplication with scheduling strategy "
+                 << (sched_type == omp_sched_static ? "static" : 
+                     (sched_type == omp_sched_dynamic ? "dynamic" : 
+                      (sched_type == omp_sched_guided ? "guided" : "auto")))
+                 << " and chunk size " << chunk_size 
+                 << " took " << fixed << setprecision(6) << elapsed.count() << " seconds." << endl;
 
-        // Check results
-        checkResults(sparse_result, dense_result);
+            // Write timing result to CSV file
+            result_file << fixed << setprecision(6) << probability << ","
+                        << (sched_type == omp_sched_static ? "static" : 
+                            (sched_type == omp_sched_dynamic ? "dynamic" : 
+                             (sched_type == omp_sched_guided ? "guided" : "auto"))) << ","
+                        << chunk_size << ","
+                        << num_threads << ","
+                        << elapsed.count() << "\n";
+
+            // Perform dense matrix multiplications for comparison
+            vector<vector<int>> dense_result = multiplyMatrices(X, Y);
+
+            // Check results
+            checkResults(sparse_result, dense_result);
+        }
     }
 
     result_file.close();
